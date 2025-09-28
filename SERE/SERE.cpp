@@ -1,7 +1,7 @@
 ﻿// SERE.cpp : Defines the entry point for the application.
 //
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 
 #include <fstream>
 #include <streambuf>
