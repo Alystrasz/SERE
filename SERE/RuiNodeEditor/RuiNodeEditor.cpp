@@ -1,7 +1,7 @@
 #include "RuiNodeEditor.h"
-#include "imgui/imgui.h"
+#include "Imgui/imgui.h"
 
-#include "imgui/imgui_stdlib.h"
+#include "Imgui/imgui_stdlib.h"
 
 #include "Util.h"
 

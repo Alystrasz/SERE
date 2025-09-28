@@ -12,7 +12,7 @@
 class RenderInstance;
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui/imgui.h"
+#include "Imgui/imgui.h"
 #include "intTypes.h"
 #include "FontAtlas.h"
 #include "ImageAtlas.h"
