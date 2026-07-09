@@ -1,24 +1,24 @@
 #pragma once
 
-#include <d3d11_1.h>
+
 #include <fstream>
+#include <algorithm>
 #include <map>
 #include <string>
 #include <any>
-#pragma comment(lib,"d3d11.lib")
-#include <d3dcompiler.h>
-#pragma comment(lib,"d3dcompiler.lib")
+
 
 class RenderInstance;
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui/imgui.h"
-#include "intTypes.h"
+#include "Imgui/imgui.h"
+//#include "IntTypes.h"
 #include "FontAtlas.h"
 #include "ImageAtlas.h"
 #include "ShaderStructs.h"
 #include "Util.h"
 #include "RuiNodeEditor/RuiVariables.h"
+#include "RenderFrameworks/RenderFramework.h"
 
 struct DrawInfoUnknown3
 {
@@ -46,18 +46,7 @@ struct DrawInfo
     DrawInfoUnknown3 ruiUnk3[2];
 };
 
-struct Vertex_t
-{
-    float position[3];
-    float float_C[3];
-    float float_18[4];
 
-    float float_28[2];
-    WORD assetIndex;
-    WORD assetIndex2;
-    WORD word_34;
-    WORD word_36;
-};
 
 struct IndexSegment_t {
     FontAtlas_t* fontAtlas;
@@ -107,84 +96,47 @@ struct TransformResult {
 
 struct RenderQuad
 {
+    __m128 UvBase;
     __m128 xUvVector;
     __m128 yUvVector;
-    __m128 UvBase;
     __m128 m128_30;
     __m128 m128_40;
     __m128 m128_50;
-    WORD assetIndex;
-    WORD assetIndex2;
-    WORD styleDescriptorIndex;
-    WORD flags;
+    short assetIndex;
+    short assetIndex2;
+    short styleDescriptorIndex;
+    short flags;
     float vert[4][2];
 };
-
-struct StyleDescriptorShader_t
-{
-    Color color0 = Color(1.f,1.f,1.f,1.f);
-    Color color1 = Color(0.f,0.f,0.f,0.f);
-    Color color2 = Color(0.f,0.f,0.f,0.f);
-    float blend = 1.f;
-    float premul = 0.f;
-    float _anon_0 = 0.f;
-    float _anon_1 = 0.f;
-    float _anon_2 = 0.f;
-    float _anon_3 = 0.f;
-    float _anon_4 = 0.f;
-    float _anon_5 = 0.f;
-    float _anon_6 = 0.f;
-    BYTE gap_54[12];
-    
-};
-
-
 
 
 struct Globals {
     float currentTime = 0.f;
+    float adsFracValue = 0.f;
+    float localPlayerPos[3];
+    float screenWidth = 0.f;
+    float screenHeight = 0.f;
+};
+class RenderInstance;
+
+struct RenderJob {
+    int layer;
+    std::function<void(RenderInstance& render)> func;
 };
 
 class RenderInstance
 {
 
 
-private:
-    ID3D11Device* device;
-    ID3D11DeviceContext *deviceContext;
-    ID3D11SamplerState* samplerState;
-
-    ID3D11BlendState* blendState;
-    ID3D11Texture2D* targetTexture;
-    ID3D11RenderTargetView* targetView;
-    
-    ID3D11Texture2D* depthTexture;
-    ID3D11DepthStencilView* depthStencil;
-    ID3D11DepthStencilState* depthStencilState;
-    ID3D11RasterizerState* rasterState;
-    D3D11_VIEWPORT viewport;
-
-    ID3D11Buffer* commonPerCameraBuffer;
-    ID3D11Buffer* modelInstanceBuffer;
-
-    ID3D11Buffer* indexBuffer;
-    ID3D11Buffer* vertexBuffer;
-    ID3D11Buffer* styleDescBuffer;
-    ID3D11ShaderResourceView* styleDescriptorResourceView;
-
-    ID3D11VertexShader* vertexShader;
-    ID3D11InputLayout *shaderLayout;
-    ID3D11PixelShader* pixelShader;
-
-
-
 public:
-    ID3D11ShaderResourceView* targetResourceView;
+
     std::vector<__m128> transformSizes;
     std::vector<TransformResult> transformResults;
     DrawInfo drawInfo;
     Globals globals;
+    
 
+    std::vector<RenderJob> jobs;
     std::vector<Vertex_t> verts;
     std::vector<uint16_t> indices;
     std::vector<IndexSegment_t> segments;
@@ -193,9 +145,9 @@ public:
 
     float elementWidth;
     float elementHeight;
-    float elementWidthRatio;
-    float elementHeightRatio;
-
+    float elementWidthRpc;
+    float elementHeightRpc;
+    float previewZoom = 1.0f;
 
     void AddImageAtlasSegment(ImageAtlas* atlas) {
         if (segments.size() == 0) {
@@ -259,19 +211,15 @@ public:
     void sub_FFAE0(__m128 a1,__m128 a2, __m128* a3);
 
 
-    void initBuffers_v30();
-    void setD11Device(ID3D11Device* dev, ID3D11DeviceContext* cont) {
-        device = dev;
-        deviceContext = cont;
-    }
+
     void StartFrame(float time);
     void EndFrame();
 
     void SetSize(float width, float height) {
         elementHeight = height;
-        elementHeightRatio = 1.f/height;
+        elementHeightRpc = 1.f/height;
         elementWidth = width;
-        elementWidthRatio = 1.f/width;
+        elementWidthRpc = 1.f/width;
     
         memset(&drawInfo,0,sizeof(DrawInfo));
         drawInfo.float_18 = 0.f;
@@ -289,19 +237,35 @@ public:
         drawInfo.ruiUnk3[0].float_24 = 0.f;
         drawInfo.ruiUnk3[0].float_28 = 0.f;
         drawInfo.ruiUnk3[0].float_2C = 1.f;
+        previewZoom = 1.0f;
     }
 
-    RenderInstance(ID3D11Device* dev, ID3D11DeviceContext* context, float width, float height) {
+    RenderInstance(float width, float height) {
         SetSize(width,height);
-        device = dev;
-        deviceContext = context;
-        initBuffers_v30();
     }
 
     void DrawImage() {
         ImGui::Begin("Render Image");
+
+        constexpr float minZoom = 1.0f;
+        constexpr float maxZoom = 16.0f;
+
+        if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+            previewZoom = std::clamp(previewZoom + ImGui::GetIO().MouseWheel * 0.25f, minZoom, maxZoom);
+        }
+
         float width = ImGui::GetWindowWidth();
-        ImGui::Image(targetResourceView,ImVec2(width,elementHeight/elementWidth*width),ImVec2(0,0),ImVec2(1,1));
+        width -= 10; //margin
+        width *= previewZoom;
+        ImGui::Image(g_renderFramework->GetRuiView(), ImVec2(width, elementHeight / elementWidth * width), ImVec2(0, 0), ImVec2(1, 1));
+        if (previewZoom > minZoom &&
+            ImGui::IsItemHovered() &&
+            (ImGui::IsMouseDragging(ImGuiMouseButton_Left) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle))) {
+            const ImVec2 dragDelta = ImGui::GetIO().MouseDelta;
+            ImGui::SetScrollX(ImGui::GetScrollX() - dragDelta.x);
+            ImGui::SetScrollY(ImGui::GetScrollY() - dragDelta.y);
+        }
+
         ImGui::End();
     }
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RuiNodeEditor/RuiNodeEditor.h"
-
+#include <format>
 
 class SplitFloat2Node : public RuiBaseNode
 {
@@ -105,6 +105,36 @@ class HSVToColorNode : public RuiBaseNode
 	explicit HSVToColorNode(RenderInstance& prot,ImFlow::StyleManager& styles, rapidjson::GenericObject<false,rapidjson::Value> obj);
 	void draw() override;
 	void Serialize(rapidjson::GenericValue<rapidjson::UTF8<>>& obj,rapidjson::Document::AllocatorType& allocator) override;
+	void Export(RuiExportPrototype& proto) override;
+
+	static std::vector<std::shared_ptr<ImFlow::PinProto>> GetPinInfo();
+};
+
+class SplitTransformSizeNode : public RuiBaseNode
+{
+public:
+	static inline std::string name = "Split Size";
+	static inline std::string category = "Split Merge";
+
+	explicit SplitTransformSizeNode(RenderInstance& prot, ImFlow::StyleManager& styles);
+	explicit SplitTransformSizeNode(RenderInstance& prot, ImFlow::StyleManager& styles, rapidjson::GenericObject<false, rapidjson::Value> obj);
+	void draw() override;
+	void Serialize(rapidjson::GenericValue<rapidjson::UTF8<>>& obj, rapidjson::Document::AllocatorType& allocator) override;
+	void Export(RuiExportPrototype& proto) override;
+
+	static std::vector<std::shared_ptr<ImFlow::PinProto>> GetPinInfo();
+};
+
+class MergeTransformSizeNode : public RuiBaseNode
+{
+public:
+	static inline std::string name = "Merge Size";
+	static inline std::string category = "Split Merge";
+
+	explicit MergeTransformSizeNode(RenderInstance& prot, ImFlow::StyleManager& styles);
+	explicit MergeTransformSizeNode(RenderInstance& prot, ImFlow::StyleManager& styles, rapidjson::GenericObject<false, rapidjson::Value> obj);
+	void draw() override;
+	void Serialize(rapidjson::GenericValue<rapidjson::UTF8<>>& obj, rapidjson::Document::AllocatorType& allocator) override;
 	void Export(RuiExportPrototype& proto) override;
 
 	static std::vector<std::shared_ptr<ImFlow::PinProto>> GetPinInfo();

@@ -7,17 +7,22 @@
 
 
 
-AssetRenderNode::AssetRenderNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBaseNode(name,category,GetPinInfo(),rend,style),maskFlag(false) {
+AssetRenderNode::AssetRenderNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBaseNode(name,category,GetPinInfo(),rend,style),maskFlag(false),layer(0) {
 
 	getIn<TransformResult>("Transform")->setEmptyVal(render.transformResults[2]);
 }
 
-AssetRenderNode::AssetRenderNode(RenderInstance& rend, ImFlow::StyleManager& style, rapidjson::GenericObject<false, rapidjson::Value> obj) :AssetRenderNode(rend, style) {}
+AssetRenderNode::AssetRenderNode(RenderInstance& rend, ImFlow::StyleManager& style, rapidjson::GenericObject<false, rapidjson::Value> obj) :AssetRenderNode(rend, style) {
+	if (obj.HasMember("Layer") && obj["Layer"].IsInt()) {
+		layer = obj["Layer"].GetInt();
+	}
+}
 
 void AssetRenderNode::draw() {
-
+	ImGui::PushItemWidth(70.f);
 	ImGui::Checkbox("Mask mode",&maskFlag);
-	
+	ImGui::InputInt("Layer",&layer);
+	ImGui::PopItemWidth();
 	AssetInputData input{};
 	input.mainColor = getInVal<ColorVariable>("Main Color");
 	input.maskColor = getInVal<ColorVariable>("Mask Color");
@@ -35,13 +40,18 @@ void AssetRenderNode::draw() {
 	input.maskSize = getInVal<Float2Variable>("Mask Size");
 	input.maskRotation = getInVal<FloatVariable>("Mask Rotation");
 	input.transform = getInVal<TransformResult>("Transform");
-	input.flags = 0x1000 | maskFlag;
-	Render_Asset(render,input);
+	input.flags = maskFlag ? 0x1001 : 0x1000;
+
+	render.jobs.emplace_back(layer, [input](RenderInstance& render) {
+		Render_Asset(render,input);
+	} );
+	
 }
 
 void AssetRenderNode::Serialize(rapidjson::GenericValue<rapidjson::UTF8<>>& obj, rapidjson::Document::AllocatorType& allocator) {
 	obj.AddMember("Name",name,allocator);
 	obj.AddMember("Category",category,allocator);
+	obj.AddMember("Layer",layer,allocator);
 	RuiBaseNode::Serialize(obj,allocator);
 }
 
@@ -64,13 +74,16 @@ void AssetRenderNode::Export(RuiExportPrototype& proto) {
 	input.maskSize = getInVal<Float2Variable>("Mask Size");
 	input.maskRotation = getInVal<FloatVariable>("Mask Rotation");
 	input.transform = getInVal<TransformResult>("Transform");
-	input.flags = 0x1000 | maskFlag;
+	input.flags = maskFlag ? 0x1001 : 0x1000;
 
 
 	if (!input.mainAsset.name.size()) {
 		std::string mainAssetFallback = Variable::UniqueName();
 		input.mainAsset.name = mainAssetFallback;
 		ExportElement<std::string> ele;
+#if _DEBUG
+		ele.sourceNodeName = typeid(*this).name();
+#endif
 		ele.dependencys = { };
 		ele.identifier = mainAssetFallback;
 		ele.callback =[mainAssetFallback](RuiExportPrototype& proto) {
@@ -85,6 +98,9 @@ void AssetRenderNode::Export(RuiExportPrototype& proto) {
 		std::string maskAssetFallback = Variable::UniqueName();
 		input.maskAsset.name = maskAssetFallback;
 		ExportElement<std::string> ele;
+#if _DEBUG
+		ele.sourceNodeName = typeid(*this).name();
+#endif
 		ele.dependencys = { };
 		ele.identifier = maskAssetFallback;
 		ele.callback =[maskAssetFallback](RuiExportPrototype& proto) {
@@ -113,7 +129,7 @@ void AssetRenderNode::Export(RuiExportPrototype& proto) {
 
 	
 
-	proto.step2Callbacks.push_back([input](RuiExportPrototype& proto) {
+	proto.renderJobs.emplace_back(layer,[input](RuiExportPrototype& proto) {
 		StyleDescriptorOffsets style;
 		style.type = 1;
 		style.color0 = proto.GetColorDataVariableOffset(input.mainColor);
@@ -121,7 +137,7 @@ void AssetRenderNode::Export(RuiExportPrototype& proto) {
 		style.color2 = proto.GetColorDataVariableOffset(input.tertColor);
 		style.blend = proto.GetFloatDataVariableOffset(input.blend);
 		style.premul = proto.GetFloatDataVariableOffset(input.premul);
-		uint16_t styleId = proto.styleDescriptor.size();
+		uint16_t styleId = (uint16_t)proto.styleDescriptor.size();
 		proto.styleDescriptor.push_back(style);
 		struct AssetRenderOffsets {
 			uint16_t type = 1;
@@ -181,14 +197,23 @@ std::vector<std::shared_ptr<ImFlow::PinProto>> AssetRenderNode::GetPinInfo() {
 	return info;
 }
 
-AssetCircleRenderNode::AssetCircleRenderNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBaseNode(name,category,GetPinInfo(),rend,style) {
+AssetCircleRenderNode::AssetCircleRenderNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBaseNode(name,category,GetPinInfo(),rend,style),layer(0) {
 
 	getIn<TransformResult>("Transform")->setEmptyVal(render.transformResults[2]);
 }
 
-AssetCircleRenderNode::AssetCircleRenderNode(RenderInstance& rend, ImFlow::StyleManager& style, rapidjson::GenericObject<false, rapidjson::Value> obj) :AssetCircleRenderNode(rend, style) {}
+AssetCircleRenderNode::AssetCircleRenderNode(RenderInstance& rend, ImFlow::StyleManager& style, rapidjson::GenericObject<false, rapidjson::Value> obj) :AssetCircleRenderNode(rend, style) {
+	if (obj.HasMember("Layer") && obj["Layer"].IsInt()) {
+		layer = obj["Layer"].GetInt();
+	}
+}
 
 void AssetCircleRenderNode::draw() {
+
+	ImGui::PushItemWidth(70.f);
+	ImGui::InputInt("Layer",&layer);
+	ImGui::PopItemWidth();
+
 	AssetCircleInputData input{};
 	input.mainColor = getInVal<ColorVariable>("Main Color");
 	input.scndColor = getInVal<ColorVariable>("Secondary Color");
@@ -209,12 +234,17 @@ void AssetCircleRenderNode::draw() {
 
 	input.transform = getInVal<TransformResult>("Transform");
 	input.flags = 0x2000;
-	Render_AssetSmall(render,input);
+
+	render.jobs.emplace_back(layer, [input](RenderInstance& render) {
+		Render_AssetSmall(render,input);
+	});
+	
 }
 
 void AssetCircleRenderNode::Serialize(rapidjson::GenericValue<rapidjson::UTF8<>>& obj, rapidjson::Document::AllocatorType& allocator) {
 	obj.AddMember("Name",name,allocator);
 	obj.AddMember("Category",category,allocator);
+	obj.AddMember("Layer",layer,allocator);
 	RuiBaseNode::Serialize(obj,allocator);
 }
 
@@ -259,7 +289,7 @@ void AssetCircleRenderNode::Export(RuiExportPrototype& proto) {
 
 
 
-	proto.step2Callbacks.push_back([input](RuiExportPrototype& proto) {
+	proto.renderJobs.emplace_back(layer,[input](RuiExportPrototype& proto) {
 		StyleDescriptorOffsets style;
 		style.type = 2;
 		style.color0 = proto.GetColorDataVariableOffset(input.mainColor);
@@ -275,7 +305,7 @@ void AssetCircleRenderNode::Export(RuiExportPrototype& proto) {
 		style._anon_4 = ellipseSizeOffset.y;
 		style._anon_5 = proto.GetFloatDataVariableOffset(input.innerMask);
 		style._anon_6 = proto.GetFloatDataVariableOffset(input.vingette);
-		uint16_t styleId = proto.styleDescriptor.size();
+		uint8_t styleId = (uint8_t)proto.styleDescriptor.size();
 		proto.styleDescriptor.push_back(style);
 		struct AssetCircleRenderOffsets {
 			uint16_t type = 2;
@@ -481,22 +511,32 @@ std::vector<std::shared_ptr<ImFlow::PinProto>> TextSizeNode::GetPinInfo() {
 }
 
 
-TextRenderNode::TextRenderNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBaseNode(name,category,GetPinInfo(),rend,style) {
+TextRenderNode::TextRenderNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBaseNode(name,category,GetPinInfo(),rend,style),layer(0) {
 
 	getIn<TransformResult>("Parent")->setEmptyVal(render.transformResults[2]);
 }
 
-TextRenderNode::TextRenderNode(RenderInstance& rend,ImFlow::StyleManager& style, rapidjson::GenericObject<false,rapidjson::Value> obj):TextRenderNode(rend,style){}
+TextRenderNode::TextRenderNode(RenderInstance& rend,ImFlow::StyleManager& style, rapidjson::GenericObject<false,rapidjson::Value> obj):TextRenderNode(rend,style){
+	if (obj.HasMember("Layer") && obj["Layer"].IsInt()) {
+		layer = obj["Layer"].GetInt();
+	}
+}
 
 void TextRenderNode::draw() {
 	const TextInputData& data = getInVal<TextInputData>("Data");
 	const TransformResult& parent = getInVal<TransformResult>("Parent");
-	Text_Render(render,data,parent);
+	ImGui::PushItemWidth(70.f);
+	ImGui::InputInt("Layer",&layer);
+	ImGui::PopItemWidth();
+	render.jobs.emplace_back(layer, [data, parent](RenderInstance& render) {
+		Text_Render(render,data,parent);
+	});
 }
 
 void TextRenderNode::Serialize(rapidjson::GenericValue<rapidjson::UTF8<>>& obj, rapidjson::Document::AllocatorType& allocator) {
 	obj.AddMember("Name",name,allocator);
 	obj.AddMember("Category",category,allocator);
+	obj.AddMember("Layer",layer,allocator);
 	RuiBaseNode::Serialize(obj,allocator);
 }
 
@@ -555,7 +595,7 @@ uint8_t AddTextStyleToProto(RuiExportPrototype& proto,const TextStyleData& style
 	style0._anon_8 = proto.GetFloatDataVariableOffset(style.boltness);
 	style0._anon_9 = proto.GetFloatDataVariableOffset(style.blur);
 	style0._anon_10 = proto.GetFloatDataVariableOffset(style.style_32);
-	uint16_t res = proto.styleDescriptor.size();
+	uint8_t res = (uint8_t)proto.styleDescriptor.size();
 	proto.styleDescriptor.push_back(style0);
 	return res;
 }
@@ -576,7 +616,7 @@ void TextRenderNode::Export(RuiExportPrototype& proto) {
 
 
 
-	proto.step2Callbacks.push_back([input,parent](RuiExportPrototype& proto) {
+	proto.renderJobs.emplace_back(layer,[input,parent](RuiExportPrototype& proto) {
 
 		struct TextRenderOffsets {
 			uint16_t type = 0;
@@ -599,6 +639,9 @@ void TextRenderNode::Export(RuiExportPrototype& proto) {
 		proto.AddRenderJobData((uint8_t*)&rend, sizeof(rend));
 		
 		ExportElement<std::string> ele;
+#if _DEBUG
+		ele.sourceNodeName = "TextRenderNode";
+#endif
 		ele.identifier = input.sizeName;
 		ele.dependencys = {input.text.name,input.minSize.name,input.maxSize.name};
 		AddTextStyleToDependency(ele.dependencys,input.styles[0]);

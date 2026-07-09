@@ -3,7 +3,7 @@
 #include <set>
 #include "Util.h"
 
-#include "imgui/ImNodeFlow.h"
+#include "Imgui/ImNodeFlow.h"
 
 
 class RuiBaseNode;
@@ -21,7 +21,7 @@ public:
 		ImVec2 pos = getPos();
 		obj.AddMember("PosX", pos.x, allocator);
 		obj.AddMember("PosY", pos.y, allocator);
-		obj.AddMember("Id", getUID(), allocator);
+		obj.AddMember("Id", static_cast<uint64_t>(getUID()), allocator);
 	}
 	virtual void Export(RuiExportPrototype&) = 0;
 protected:
@@ -39,6 +39,9 @@ protected:
 			pin->CreatePin(this, styles);
 		}
 	}
+	FloatVariable getInNumeric(const char* id);
+	MathVariable getInMath(const char* id);
+	
 };
 
 struct NodeType {
@@ -60,14 +63,23 @@ template<class T> std::vector<std::shared_ptr<ImFlow::PinProto>> GetPinInfo() {
 }
 
 template <class T>std::shared_ptr<RuiBaseNode> RecreateNode(ImFlow::ImNodeFlow& mINF, RenderInstance& proto, ImFlow::StyleManager& styles, rapidjson::GenericObject<false, rapidjson::Value> obj) {
-	if (!(obj.HasMember("Id") && obj["Id"].IsUint64()))return nullptr;
+	if (!obj.HasMember("Id"))return nullptr;
 	if (!(obj.HasMember("PosX") && obj["PosX"].IsNumber()))return nullptr;
 	if (!(obj.HasMember("PosY") && obj["PosY"].IsNumber()))return nullptr;
 
 	ImVec2 pos;
 	pos.x = obj["PosX"].GetFloat();
 	pos.y = obj["PosY"].GetFloat();
-	uint64_t uid = obj["Id"].GetUint64();
+	uint64_t uid = 0;
+	if (obj["Id"].IsUint64()) {
+		uid = obj["Id"].GetUint64();
+	}
+	else if (obj["Id"].IsInt64() && obj["Id"].GetInt64() >= 0) {
+		uid = static_cast<uint64_t>(obj["Id"].GetInt64());
+	}
+	else {
+		return nullptr;
+	}
 
 	return mINF.recreateNode<T>(pos, uid, proto, styles, obj);
 }
@@ -81,3 +93,5 @@ template<class T> NodeType CreateNodeType() {
 };
 
 
+bool isPinNumeric(const std::type_info& out, const std::type_info& in);
+bool isPinMath(const std::type_info& out, const std::type_info& in);

@@ -1,10 +1,13 @@
 #pragma once
 
-#include <d3d11_1.h>
+
 #include <map>
 #include <filesystem>
+#include "RenderFrameworks/RenderFramework.h"
 
 namespace fs = std::filesystem;
+
+
 
 
 struct KerningInfo_t
@@ -25,6 +28,13 @@ struct GlyphChunk_t {
     uint64_t mask;
 };
 
+struct FontShaderData_t {
+    float minX;
+    float minY;
+    float maxX;
+    float maxY;
+};
+
 struct Glyph_t
 {
     float float_0;
@@ -39,6 +49,60 @@ struct Glyph_t
     float posMaxY;
 };
 
+struct UIFontHeader_v7_t
+{
+    char* name;
+
+    uint16_t fontIndex;// index used in engine/by ruis to get this fonts
+
+    uint16_t numProportions; // number of character proportions
+
+    // number of chunks for glyph and unicode lookup, 64 unique glyphs/unicodes per chunk
+    uint16_t numKernings; // unused
+    uint16_t numUnicodeChunks;
+
+    int glyphIndex; // base glyph index, unused
+    int unicodeIndex; // base unicode character index, this gets subtracted off input characters, everything before this index is invalid.
+
+    uint32_t numTextures; // used for mem alloc
+
+    // for scaling the character proportions
+    float proportionScaleX;
+    float proportionScaleY;
+
+    float unk_24;
+    float unk_28;
+
+    // base index for texture count
+    uint32_t textureIndex; // used for mem alloc
+
+    // for getting a texture from a provided unicode/glyph
+    uint16_t* unicodeChunks; // index per 64 unicodes, index into other arrays to get assigned texture (unicodeBaseIndex & unicodeIndexMask)
+    uint16_t* unicodeChunksIndex; // the base texture index, added with popcount from unicodeIndexMask
+    uint64_t* unicodeChunksMask; // each bit represents a single unicode
+
+    Proportion_t* proportions; // array of UIFontProportion_v7_t
+    Glyph_t* glyphs; // array of UIFontTexture_v7_t
+
+    KerningInfo_t* kerningInfo; // for kerning?
+};
+
+struct UIFontAtlasAssetHeader_v6_t
+{
+    uint16_t fontCount;
+    uint16_t unk_2; // count for the data at unk_18
+
+    uint16_t width;
+    uint16_t height;
+
+    // like ui image atlas
+    float widthRatio;
+    float heightRatio;
+    UIFontHeader_v7_t* fonts;
+    uint8_t* unk_18;
+
+    uint64_t atlasGUID; // guid
+};
 
 struct Font_t {
     std::string name;
@@ -72,17 +136,19 @@ struct FontAtlas_t {
     std::map<uint16_t,Font_t> fonts;
     std::vector<uint8_t> unk_18;
 
-    ID3D11Resource* imageResource;
-    ID3D11ShaderResourceView* imageResourceView;
-    ID3D11Buffer *boundsBuffer;
-    ID3D11ShaderResourceView *boundsResourceView;
+    size_t textureId;
+    size_t shaderDataId;
 
-    FontAtlas_t(fs::path& jsonPath,size_t atlasIndex,ID3D11Device* d11Device);
-    void loadFromFile(fs::path& jsonPath,ID3D11Device* d11Device);
+    FontAtlas_t(fs::path& jsonPath,size_t atlasIndex);
+    FontAtlas_t(UIFontAtlasAssetHeader_v6_t* fontAtlasHdr,size_t textureId);
+    void loadFromFile(fs::path& jsonPath);
+    void CreateShaderDataBuffer();
 };
 
 extern std::vector<FontAtlas_t> fonts;
 
-void loadFonts(ID3D11Device* d11Device);
+void loadFonts();
 Font_t* getFontByIndex(uint16_t id);
 FontAtlas_t* getFontAtlasByIndex(uint16_t id);
+void loadRpakFont(UIFontAtlasAssetHeader_v6_t* font, size_t textureId);
+void clearFontAtlases();

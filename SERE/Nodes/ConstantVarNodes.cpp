@@ -1,6 +1,6 @@
 #include "ConstantVarNodes.h"
 #include "CustomImGuiWidgets.h"
-#include "imgui/imgui_stdlib.h"
+#include "Imgui/imgui_stdlib.h"
 
 
 
@@ -65,7 +65,7 @@ BoolVarNode::BoolVarNode(RenderInstance& rend,ImFlow::StyleManager& style, rapid
 
 void BoolVarNode::draw() {
 	ImGui::PushItemWidth(90);
-	ImGui::Selectable("Value",&value);
+	ImGui::Checkbox("Value",&value);
 	ImGui::PopItemWidth();
 }
 
@@ -291,8 +291,8 @@ ColorVarNode::ColorVarNode(RenderInstance& rend,ImFlow::StyleManager& style, rap
 }
 
 void ColorVarNode::draw() {
-	ImGui::PushItemWidth(90);
-	ImGui::ColorPicker4("Value",value);
+	ImGui::PushItemWidth(180);
+	ImGui::ColorEdit4("Value", value);
 	ImGui::PopItemWidth();
 }
 
@@ -391,6 +391,9 @@ void AssetVarNode::Export(RuiExportPrototype& proto) {
 	const AssetVariable& out = getOut<AssetVariable>("Value")->val();
 	proto.AddDataVariable(out);
 	ExportElement<std::string> ele;
+#if _DEBUG
+	ele.sourceNodeName = typeid(*this).name();
+#endif
 	ele.identifier = out.name;
 	std::string assetName = imageAssetMap[hash].name;
 	ele.callback = [out,assetName](RuiExportPrototype& proto) {
@@ -417,7 +420,7 @@ SizeVarNode::SizeVarNode(RenderInstance& rend,ImFlow::StyleManager& style):RuiBa
 	getOut<TransformSize>("Value")->behaviour([this]() {
 		TransformSize var;
 
-		var.size = _mm_load_ps(value);
+		var.size = _mm_loadu_ps(value);
 		return var;
 
 	});

@@ -17,6 +17,9 @@ struct RuiExportPrototype;
 
 template<typename T>
 struct ExportElement {
+#ifdef _DEBUG
+	std::string sourceNodeName;
+#endif
 	T identifier;
 	std::set<T> dependencys;
 	std::function<void(RuiExportPrototype&)> callback;
@@ -61,7 +64,7 @@ struct StyleDescriptorOffsets {
 	uint16_t _anon_10 = 0;
 };
 
-#pragma push(pack)
+
 struct RuiPackageHeader_v1_t {
 	uint32_t magic;
 	uint16_t packageVersion;
@@ -99,7 +102,7 @@ struct RuiPackageHeader_v1_t {
 	uint64_t rpakPointersInDefaultDataOffset;
 	uint64_t defaultStringsDataSize;
 };
-#pragma pop(pack)
+
 
 struct Argument_t
 {
@@ -136,6 +139,17 @@ struct ArgCluster_t
 	uint16_t renderJobCount;
 };
 
+struct RuiPackageMapping_v1_t {
+	uint32_t dataCount;
+	uint16_t nestedMappingCount;
+	uint16_t cublicSpline;
+};
+
+struct ExportRenderJob {
+	int layer;
+	std::function<void(RuiExportPrototype&)> func;
+};
+
 struct RuiExportPrototype {
 
 
@@ -147,7 +161,7 @@ struct RuiExportPrototype {
 
 	std::vector<ExportElement<std::string>> codeElements;
 	std::vector<ExportElement<uint64_t>> transformCallbacks;
-	std::vector<std::function<void(RuiExportPrototype&)>> step2Callbacks;
+	std::vector<ExportRenderJob> renderJobs;
 	uint16_t currentDataStructSize = 0;
 	std::map<float, uint16_t> floatConstants;
 	std::map<std::string, uint16_t> stringConstants;
@@ -163,10 +177,11 @@ struct RuiExportPrototype {
 	std::vector<uint8_t> transformData;
 	std::vector<uint8_t> renderJobData;
 	std::vector<uint8_t> defaultValues;
+	std::vector<uint8_t> mappingData;
 	std::vector<uint16_t> rpakPointersInDefaultValues;
 	std::stringstream defaultStrings;
 	uint16_t renderJobCount;
-	ArgCluster_t cluster;
+	ArgCluster_t cluster{};
 	std::vector<Argument_t> exportArgs;
 
 	RuiExportPrototype(const RenderInstance& inst,const std::string& name);
@@ -175,6 +190,7 @@ struct RuiExportPrototype {
 	void AddConstant(std::string s);
 
 	void AddTransformData(uint8_t* data, size_t size);
+	void AddMappingData(uint8_t* data, size_t size);
 
 	void AddRenderJobData(uint8_t* data, size_t size);
 
@@ -201,6 +217,7 @@ struct RuiExportPrototype {
 	void GenerateRenderJobData();
 	void GenerateVariables(std::map<std::string,std::any>& argValues);
 	void GenerateArguments();
+	void GenerateMappingData();
 	bool GenerateCodeStruct();
 	void Generate(std::unordered_map<ImFlow::NodeUID, std::shared_ptr<ImFlow::BaseNode>>& nodes, RenderInstance& render);
 

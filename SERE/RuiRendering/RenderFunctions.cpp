@@ -2,14 +2,18 @@
 #include "RenderManager.h"
 #include "Util.h"
 
+#if defined(_MSC_VER)
+    #define POPCNT64(x) __popcnt64(x)
+#else
+    #define POPCNT64(x) __builtin_popcountll((unsigned long long)(x))
+#endif
+
 #undef max
 #undef min
 
 #define TAU 6.2831855f
 
-bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
-	__int16 unknown8Index; // bp
-	//testStruct* a5; // r9
+bool Render_Asset(RenderInstance& proto, AssetInputData input) {
 
 	__m128 v9; // xmm2
 	__m128 v10; // xmm6
@@ -17,20 +21,16 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 	__m128 v12; // xmm1
 	__m128 v13; // xmm11
 	uint32_t v14; // rcx
-	__int16 assetIndex2; // si
-	__int64 atlasIndex; // r11
-	__int16 assetIndex; // r15
-	__int16 flags; // r10
+	int16_t assetIndex2; // si
+	size_t atlasIndex; // r11
+	uint16_t assetIndex; // r15
+	int16_t flags; // r10
 	Asset_t a7; // rdi
 	uint32_t v20; // rcx
 	__m128 mins; // xmm8
 	__m128 maxs; // xmm9
 	__m128 v26; // xmm5
-	__m128 v27; // xmm13
-	__m128 v28; // xmm4
-
 	__m128 texMins; // xmm13
-	__m128 v31; // xmm4
 	__m128 texMaxs; // xmm4
 	__m128 v33; // xmm1
 	__m128 texSize; // xmm2
@@ -59,8 +59,6 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 	__m128 v59; // xmm11
 	__m128 v60; // xmm3
 	__m128 v61; // xmm1
-	__m128 v62; // xmm2
-	__m128 v63; // xmm14
 	__m128 v64; // xmm0
 
 	__m128 v68; // [rsp+80h] [rbp-188h]
@@ -97,18 +95,26 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 	v14 = input.mainAsset.hash;
 	if(v14== INVALID_ASSET)
 		return false;
+	const auto primaryAssetIt = imageAssetMap.find(v14);
+	if (primaryAssetIt == imageAssetMap.end())
+		return false;
+	const Asset_t& primaryAsset = primaryAssetIt->second;
 	assetIndex2 = -1;
-	atlasIndex = imageAssetMap[v14].atlasIndex;//g_AssetIndexData[v14].atlasIndex;
-	assetIndex = imageAssetMap[v14].imageIndex;//g_AssetIndexData[v14].assetIndex;
-	flags = input.flags | (unsigned __int8)imageAssetMap[v14].flags;//(unsigned __int8)g_AssetIndexData[v14].byte7;
-	a7 = imageAssetMap[v14];
+	atlasIndex = primaryAsset.atlasIndex;//g_AssetIndexData[v14].atlasIndex;
+	assetIndex = static_cast<uint16_t>(primaryAsset.imageIndex);//g_AssetIndexData[v14].assetIndex;
+	flags = static_cast<uint16_t>(input.flags) | (uint8_t)primaryAsset.flags;//(unsigned __int8)g_AssetIndexData[v14].byte7;
+	a7 = primaryAsset;
 	v20 = input.maskAsset.hash;
 	if (v20 != INVALID_ASSET)
 	{
-		if (atlasIndex != imageAssetMap[v20].atlasIndex)//g_AssetIndexData[v20].atlasIndex)
+		const auto maskAssetIt = imageAssetMap.find(v20);
+		if (maskAssetIt == imageAssetMap.end())
+			return false;
+		const Asset_t& maskAsset = maskAssetIt->second;
+		if (atlasIndex != maskAsset.atlasIndex)//g_AssetIndexData[v20].atlasIndex)
 			return 0;
-		assetIndex2 = imageAssetMap[v20].imageIndex;//g_AssetIndexData[v20].assetIndex;
-		flags |= 4 * imageAssetMap[v20].flags;//g_AssetIndexData[v20].byte7;
+		assetIndex2 = static_cast<int16_t>(static_cast<uint16_t>(maskAsset.imageIndex));//g_AssetIndexData[v20].assetIndex;
+		flags |= 4 * (uint8_t)maskAsset.flags;//g_AssetIndexData[v20].byte7;
 	}
 
 
@@ -121,7 +127,7 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 	texMins = _mm_set_ps(input.texMins.value.y, input.texMins.value.x, input.texMins.value.y, input.texMins.value.x);
 
 	texMaxs = _mm_set_ps(input.texMaxs.value.y,input.texMaxs.value.x,input.texMaxs.value.y,input.texMaxs.value.x);
-	v33 = xmm_12A4E830a[((__int64)flags >> 4) & 3];
+	v33 = xmm_12A4E830a[((int64_t)flags >> 4) & 3];
 	texSize = _mm_sub_ps(texMaxs, texMins);
 
 	v36 = imageAtlases[atlasIndex].offsets[assetIndex].m128_0;
@@ -139,7 +145,7 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 		return false;
 
 	//pixelBufferElementCount = a4->pixelBufferElementCount;
-	quad.assetIndex = assetIndex;
+	quad.assetIndex = static_cast<int16_t>(assetIndex);
 	quad.assetIndex2 = assetIndex2;
 	quad.flags = flags;
 	quad.styleDescriptorIndex = proto.styleDescriptor.size();// + pixelBufferElementCount;
@@ -168,6 +174,7 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 	}
 	else
 	{
+		const uint16_t maskAssetIndex = static_cast<uint16_t>(assetIndex2);
 		maskRotation = _mm_set1_ps( input.maskRotation.value);
 
 		maskCenter = _mm_set_ps(0, 0, input.maskCenter.value.y,input.maskCenter.value.x);
@@ -183,7 +190,7 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 
 		maskSize = _mm_set_ps(0, 0, input.maskSize.value.y,input.maskSize.value.x);
 
-		v51 = _mm_shuffle_ps(imageAtlases[atlasIndex].offsets[assetIndex].m128_10, imageAtlases[atlasIndex].offsets[assetIndex2].m128_10, _MM_SHUFFLE(3, 2, 3, 2));
+		v51 = _mm_shuffle_ps(imageAtlases[atlasIndex].offsets[assetIndex].m128_10, imageAtlases[atlasIndex].offsets[maskAssetIndex].m128_10, _MM_SHUFFLE(3, 2, 3, 2));
 		v52 = _mm_sub_ps(v47, _mm_cvtepi32_ps(v48));
 		v53 = _mm_add_ps(_mm_mul_ps(_mm_movelh_ps(maskCenter, maskCenter), texSize), texMins);
 		v54 = _mm_mul_ps(v52, v52);
@@ -247,7 +254,7 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 			v51);
 
 
-		v59 = _mm_add_ps(v57, _mm_shuffle_ps(imageAtlases[atlasIndex].offsets[assetIndex2].m128_10, _mm_setzero_ps(), _MM_SHUFFLE(1, 0, 1, 0)));
+		v59 = _mm_add_ps(v57, _mm_shuffle_ps(imageAtlases[atlasIndex].offsets[maskAssetIndex].m128_10, _mm_setzero_ps(), _MM_SHUFFLE(1, 0, 1, 0)));
 	}
 
 	quad.xUvVector = _mm_movelh_ps(v42, v58);
@@ -256,7 +263,7 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 	quad.m128_30 = _mm_setzero_ps();
 	quad.m128_40 = _mm_setzero_ps();
 	quad.m128_50 = _mm_setzero_ps();
-	__m128 ruiSize = _mm_set_ps(proto.elementHeightRatio,proto.elementWidthRatio,proto.elementHeight,proto.elementWidth);
+	__m128 ruiSize = _mm_set_ps(proto.elementHeightRpc,proto.elementWidthRpc,proto.elementHeight,proto.elementWidth);
 	proto.sub_F9B80_rev(ruiSize, quad, a5, a6, a7, a8, a9, texMins, texSize);
 	return 1;
 
@@ -267,8 +274,8 @@ bool Render_Asset(RenderInstance& proto,AssetInputData& input) {
 struct fontRenderingStruct
 {
 	float float_0;
-	WORD word_4;
-	WORD word_6;
+	short word_4;
+	short word_6;
 	Glyph_t *glyph;
 };
 
@@ -289,18 +296,18 @@ uint64_t readUnicodeCharacter(const char** a1)
 	if (v2 >= 0)
 	{
 		*a1 = v3;
-		return (unsigned __int8)v2;
+		return (uint8_t)v2;
 	}
 	v5 = *v3;
 	if ((*v3 & 0xC0) != 0x80)
 		return 0LL;
 	v6 = v3 + 1;
-	if ((unsigned __int8)v2 < 0xE0u)
+	if ((uint8_t)v2 < 0xE0u)
 	{
-		if ((unsigned __int8)v2 >= 0xC2u)
+		if ((uint8_t)v2 >= 0xC2u)
 		{
 			*a1 = v6;
-			return v5 & 0x3F | ((unsigned __int8)(v2 & 0x3F) << 6);
+			return v5 & 0x3F | ((uint8_t)(v2 & 0x3F) << 6);
 		}
 		return 0LL;
 	}
@@ -309,7 +316,7 @@ uint64_t readUnicodeCharacter(const char** a1)
 		return 0LL;
 	v8 = v6 + 1;
 	v9 = v7 & 0x3F | ((v5 & 0x3F | ((v2 & 0xF) << 6)) << 6);
-	if ((unsigned __int8)v2 >= 0xF0u)
+	if ((uint8_t)v2 >= 0xF0u)
 	{
 		v10 = *v8++;
 		if ((v10 & 0xC0) != 0x80)
@@ -332,12 +339,10 @@ uint64_t readUnicodeCharacter(const char** a1)
 uint64_t getFontGlyphIndex(Font_t* font, int a2)
 {
 
-	__int64 v5; // r8
+	int64_t v5; // r8
 	char v6; // al
-	__int64 v7; // r8
-	__int64 v8; // r11
-	bool v9; // zf
-	unsigned __int64 v11; // rcx
+	int64_t v7; // r8
+	int64_t v8; // r11
 
 	v5 = (unsigned int)(a2 - font->unicodeIndex) >> 6;
 	if ((unsigned int)v5 < font->unicodeChunk.size())
@@ -346,7 +351,7 @@ uint64_t getFontGlyphIndex(Font_t* font, int a2)
 		v7 = font->unicodeChunk[v5];
 		v8 = font->glyphChunks[v7].mask;
 		if (((1LL << v6) & v8) != 0)
-			return __popcnt64((v8 & ((1LL << v6) - 1))) + (unsigned int)font->glyphChunks[v7].glyphIndex;
+			return POPCNT64((v8 & ((1LL << v6) - 1))) + (unsigned int)font->glyphChunks[v7].glyphIndex;
 	}
 	v5 = (unsigned int)(9633 - font->unicodeIndex) >> 6;
 	if ((unsigned int)v5 < font->unicodeChunk.size())
@@ -355,33 +360,25 @@ uint64_t getFontGlyphIndex(Font_t* font, int a2)
 		v7 = font->unicodeChunk[v5];
 		v8 = font->glyphChunks[v7].mask;
 		if (((1LL << v6) & v8) != 0)
-			return __popcnt64((v8 & ((1LL << v6) - 1))) + (unsigned int)font->glyphChunks[v7].glyphIndex;
+			return POPCNT64((v8 & ((1LL << v6) - 1))) + (unsigned int)font->glyphChunks[v7].glyphIndex;
 	}
 
 
 	return 0xFFFFFFFFLL;
 }
 
-const char* sub_F98F0(const char** a3, __int64 a4, const char* a5)
+const char* sub_F98F0(const char** a3, int64_t a4, const char* a5)
 {
 	const char* v5; // rsi
 	const char* v10; // rax
 	const char* v11; // rdi
-	const CHAR* result; // rax
+	const char* result; // rax
 	char v13; // cl
 	const char* v14; // rdx
 	size_t v15; // rdi
 	int Asset; // eax
 	unsigned int v17; // eax
-	__int64 qword_8; // r13
-	const char* v19; // rax
-	const char* v20; // rbx
-	__int64 v21; // rbx
-	__int64 v22; // rax
-	unsigned int v23; // ebp
-	unsigned int v24; // r14d
-	__int64 v25; // r15
-	int v26; // eax
+	int64_t qword_8; // r13
 	char assetName[112]; // [rsp+20h] [rbp-88h] BYREF
 
 	v5 = *a3;
@@ -397,9 +394,9 @@ const char* sub_F98F0(const char** a3, __int64 a4, const char* a5)
 		{
 			if (v10 == v5 + 1)
 			{
-				*(DWORD*)a4 = 0x8080B2F3;
-				result = (const CHAR*)a4;
-				*(BYTE*)(a4 + 4) = 0;
+				*(int*)a4 = 0x8080B2F3;
+				result = (const char*)a4;
+				*(char*)(a4 + 4) = 0;
 				return result;
 			}
 			return 0LL;
@@ -408,9 +405,9 @@ const char* sub_F98F0(const char** a3, __int64 a4, const char* a5)
 		{
 			if (v10 == v5 + 1)
 			{
-				*(DWORD*)a4 = -2122272013;
-				result = (const CHAR*)a4;
-				*(BYTE*)(a4 + 4) = 0;
+				*(int*)a4 = -2122272013;
+				result = (const char*)a4;
+				*(char*)(a4 + 4) = 0;
 				return result;
 			}
 			return 0LL;
@@ -429,12 +426,12 @@ const char* sub_F98F0(const char** a3, __int64 a4, const char* a5)
 		//		v5 = v19 + 1;
 		//		v21 = v11 - (v19 + 1) - 1;
 		//	LABEL_25:
-		//		if (v21 - (unsigned __int64)*(unsigned __int16*)(qword_8 + 4) > *(unsigned __int16*)(qword_8 + 6)
-		//			- (unsigned __int64)*(unsigned __int16*)(qword_8 + 4))
+		//		if (v21 - (unsigned __int64)*(unsigned __int16_t*)(qword_8 + 4) > *(unsigned __int16_t*)(qword_8 + 6)
+		//			- (unsigned __int64)*(unsigned __int16_t*)(qword_8 + 4))
 		//			return *(const CHAR**)(qword_8 + 24);
 		//		v22 = *(_QWORD*)(qword_8 + 8);
-		//		v23 = *(unsigned __int16*)(v22 + 2 * v21);
-		//		v24 = *(unsigned __int16*)(v22 + 2 * v21 + 2);
+		//		v23 = *(unsigned __int16_t*)(v22 + 2 * v21);
+		//		v24 = *(unsigned __int16_t*)(v22 + 2 * v21 + 2);
 		//		if (v23 >= v24)
 		//			return *(const CHAR**)(qword_8 + 24);
 		//		while (1)
@@ -478,22 +475,22 @@ const char* sub_F98F0(const char** a3, __int64 a4, const char* a5)
 		return "";
 	//curAsset = Asset;
 	//Asset = 0;
-	*(BYTE*)a4 = ((unsigned int)(0xF0000) >> 18) | 0xF0;
-	*(BYTE*)(a4 + 1) = ((unsigned int)(0xF0000) >> 12) & 0x3F | 0x80;
+	*(char*)a4 = ((unsigned int)(0xF0000) >> 18) | 0xF0;
+	*(char*)(a4 + 1) = ((unsigned int)(0xF0000) >> 12) & 0x3F | 0x80;
 	v17 = 0xF0000;
-	*(BYTE*)(a4 + 2) = (v17 >> 6) & 0x3F | 0x80;
-	*(BYTE*)(a4 + 3) = v17 & 0x3F | 0x80;
+	*(char*)(a4 + 2) = (v17 >> 6) & 0x3F | 0x80;
+	*(char*)(a4 + 3) = v17 & 0x3F | 0x80;
 	*(uint32_t*)(a4 + 4) = Asset;
 
 
-	return (const CHAR*)a4;
+	return (const char*)a4;
 }
 
-bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) {
-	__int16 uint8_18; // r9
+bool Render_AssetSmall(RenderInstance& proto, AssetCircleInputData data) {
+	int16_t uint8_18; // r9
 
-	__int64 result; // rax
-	__int64 transformIndex; // r14
+	int64_t result; // rax
+	int64_t transformIndex; // r14
 
 	__m128 v11; // xmm2
 	int v12; // ebx
@@ -501,11 +498,9 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 	__m128 v14; // xmm1
 	__m128 v15; // xmm7
 	uint32_t assetHash; // rcx
-	__int64 uint16_6; // rax
-	uint32_t v18; // rsi
-	__int16 assetIndex; // r12
-	__int16 pixelBufferElementCount; // cx
-	__int16 v22; // r15
+	int16_t assetIndex; // r12
+	int16_t pixelBufferElementCount; // cx
+	int16_t v22; // r15
 	__m128 v23; // xmm10
 	__m128 v24; // xmm11
 	__m128 v25; // xmm12
@@ -513,13 +508,9 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 	__m128 v27; // xmm15
 	__m128 v28; // xmm14
 	float v30; // xmm9_4
-	__int64 v31; // rdx
-	__int64 v32; // r10
-
-	float v34; // xmm5_4
 	__m128 v35; // xmm4
 	__m128 v36; // xmm3
-	textureOffset_* v37; // rcx
+	textureOffset* v37; // rcx
 	__m128 v38; // xmm0
 	__m128 v39; // xmm4
 	__m128 v40; // xmm1
@@ -571,7 +562,7 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 
 	assetIndex = imageAssetMap[assetHash].imageIndex;//g_AssetIndexData[v16].assetIndex;
 	//pixelBufferElementCount = a4->pixelBufferElementCount;
-	v22 = data.flags | imageAssetMap[assetHash].flags;
+	v22 = (uint16_t)data.flags | (uint8_t)imageAssetMap[assetHash].flags;
 	quad.assetIndex = assetIndex;
 	quad.flags = v22;
 	quad.styleDescriptorIndex = proto.styleDescriptor.size();// + pixelBufferElementCount;
@@ -599,8 +590,8 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 	v28 = _mm_set_ps(0,0,0,data.texMaxs.value.y);
 	v59 = data.vingette.value;
 
-
-	if ( fminf(transform.inputSize.m128_f32[0], transform.inputSize.m128_f32[2]) <= 0.0 )
+	;
+	if ( _mm_movemask_ps(_mm_cmple_ps(transform.inputSize,_mm_setzero_ps()))&2 )
 		return 1LL;
 	proto.AddImageAtlasSegment( &imageAtlases[imageAssetMap[assetHash].atlasIndex]);
 
@@ -609,11 +600,18 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 	v37 = &imageAtlases[imageAssetMap[assetHash].atlasIndex].offsets[assetIndex];//&uiImageAtlases[g_AssetIndexData[v18].atlasIndex].textureOffsets[assetIndex];
 	v38 = _mm_unpacklo_ps(_mm_set_ps(0,0,0,v64), _mm_set_ps(0,0,0,v65));
 	v39 = _mm_movelh_ps(v35, v35);
-	v28.m128_f32[0] = (float)(v28.m128_f32[0] - v65) * v59;
+
+	v28 = _mm_shuffle_ps(v28, v28, _MM_SHUFFLE(0,0,0,0));
+	v28 = _mm_sub_ps(v28, _mm_set1_ps(v65));
+	v28 = _mm_mul_ps(v28, _mm_set1_ps(v59));
+
 	v60 = _mm_movelh_ps(v38, v38);
 	v61 = _mm_max_ps(_mm_sub_ps(v39, v60), _mm_set1_ps(1.1754944e-38f));
-	v40 = xmm_12A4E830a[((__int64)v22 >> 4) & 3];
-	v36.m128_f32[0] = (float)((float)(transform.inputSize.m128_f32[0] * v59) * (float)(v27.m128_f32[0] - v64)) / transform.inputSize.m128_f32[0];
+	v40 = xmm_12A4E830a[((int64_t)v22 >> 4) & 3];
+	// v36.m128_f32[0] = (float)((float)(transform.inputSize.m128_f32[0] * v59) * (float)(v27.m128_f32[0] - v64)) / transform.inputSize.m128_f32[0];
+	
+	v36 = _mm_div_ps(_mm_mul_ps(_mm_mul_ps(transform.inputSize, _mm_set1_ps(v59)), _mm_sub_ps(v27, _mm_set1_ps(v64))), transform.inputSize);
+	
 	v41 = _mm_unpacklo_ps(v36, v28);
 	v42 = _mm_div_ps(
 		_mm_add_ps(
@@ -622,7 +620,7 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 		_mm_or_ps(
 			_mm_and_ps(_mm_andnot_ps(_mm_set1_ps(-0.0), v61), v40),
 			_mm_andnot_ps(v40, _mm_set1_ps(1))));
-	if ( _mm_movemask_ps(_mm_cmplt_ps(v42, _mm_set1_ps(-3.4028235e38))) )
+	if ( _mm_movemask_ps(_mm_cmplt_ps(v42, _mm_set1_ps(-std::numeric_limits<float>::max()))) )
 		return 1LL;
 	v43 = _mm_xor_ps(
 		_mm_min_ps(
@@ -670,70 +668,50 @@ bool Render_AssetSmall(RenderInstance& proto, const AssetCircleInputData& data) 
 		v56 = _mm_shuffle_ps(v56,v56, _MM_SHUFFLE(1,0,3,2));
 		v57 = _mm_shuffle_ps(v57,v56, _MM_SHUFFLE(1,0,3,2));
 	}
-	*(__m128 *)&quad.vert[0][0] = v56;
-	*(__m128 *)&quad.vert[2][0] = v57;
+	_mm_storeu_ps(&quad.vert[0][0], v56);
+	_mm_storeu_ps(&quad.vert[2][0], v57);
 	proto.AddQuad(quad);
 	return true;
 }
 
 
-bool Text_Render(RenderInstance& proto,const TextInputData& data,const TransformResult& transform) {
-	//struct_v1* v4; // r12 MAPDST
-	__int64 transformIndex; // r10
+bool Text_Render(RenderInstance& proto, TextInputData data, TransformResult transform) {
+
 	__m128 v11; // xmm2
-	__m128 v12; // xmm9
 	__m128 v13; // xmm0
 	__m128 v14; // xmm12
 	__m128 v15; // xmm1
 	__m128 v16; // xmm13
-	__m128 v18; // xmm6
-	__m128 v19; // xmm8
-
-	__m128 v26; // xmm3
 	__m128 v31; // xmm15
-	float v36; // xmm7_4
 	float v38; // xmm0_4
 	float v39; // xmm2_4
 	float v40; // xmm0_4
 	float v42; // xmm0_4
-	unsigned __int64 v43; // rsi
-	unsigned __int8 byte_7; // al
-	__int64 byte_6; // rbx
 	__m128 v46; // xmm0
 	__m128 v47; // xmm6
-	int v48; // edi
 	__m128 v49; // xmm7
 	uint32_t assetHash; // rax
-	__int64 assetIndex; // rdx
+	int64_t assetIndex; // rdx
 	Asset_t a7; // r10
 	__m128 v53; // xmm0
 	__m128 v54; // xmm2
-	__m128 v55; // xmm4
-	__m128 v56; // xmm1
-	textureOffset_* v57; // r8
-	__int64 uint16_2; // rax
-	__m128 v59; // xmm8
+	__m128 v55;
+	textureOffset* v57; // r8
+	int64_t uint16_2; // rax
 	__m128 v60; // xmm0
-	__int16 v61; // cx
 	__m128 v62; // xmm0
 	__m128 v63; // xmm1
 	__m128 v64; // xmm2
 	__m128 v65; // xmm0
-	__int64 v66; // rax
+	int64_t v66; // rax
 	//unknownRuiListElement* qword_0; // rdx
 	FontAtlas_t* fontAtlas; // r8
-	__int64 unsigned_int_8; // rax
-	__int64 v71; // rcx
-	FontAtlas_t* uiFontAtlas_8; // r9
-	uint32_t vertexIndicesElementCount; // r9d
-	unsigned int v74; // eax
-	int dword_0; // eax
 	unsigned int v76; // ecx
-	unsigned __int8 v77; // bl
+	uint8_t v77; // bl
 	const char* printString; // rdx MAPDST
 	bool stringStartsWithEscapeChar; // zf
 	char* currentCharPointer; // rax MAPDST
-	__int64 byte_4; // rdx
+	int64_t byte_4; // rdx
 	unsigned int v82; // eax
 	unsigned int v83; // r13d
 	float v84; // xmm14_4
@@ -741,7 +719,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	unsigned int v86; // eax
 	float v87; // xmm0_4
 	float v88; // xmm12_4
-	__int64 v89; // rax
+	int64_t v89; // rax
 	Glyph_t* fontGlyph; // rbx
 	Font_t* v91; // rdx MAPDST
 	float v93; // xmm11_4
@@ -750,8 +728,6 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	float v96; // xmm10_4
 	__m128 v97; // xmm8
 	__m128 v98; // xmm8
-	__m128 v99; // xmm5
-	__m128 v100; // xmm4
 	float v101; // xmm6_4
 	__m128 v102; // xmm9
 	__m128 v103; // xmm3
@@ -769,8 +745,8 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	unsigned int v115; // r15d
 	uint64_t currentUnicodeChar; // eax
 	char nextChar; // dl
-	const CHAR* v119; // rax
-	__int64 v120; // rdx
+	const char* v119; // rax
+	int64_t v120; // rdx
 	bool v121; // r12
 	float v122; // xmm11_4
 	int fontGlyphIndex; // eax
@@ -801,18 +777,16 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	__m128 v148; // xmm5
 	__m128 v149; // xmm6
 	__m128 v150; // xmm6
-	__m128i si128; // xmm2
 	__m128 v153; // xmm1
 	__m128 v154; // xmm2
 	//ruiDrawInfo* drawInfo; // rcx
-	int v156; // eax
-	__int64 v157; // rax
+	int64_t v157; // rax
 	float v158; // xmm0_4
 	float v159; // xmm0_4
 	__m128 v160; // xmm1
 	float v161; // xmm10_4
 	__m128 v162; // xmm0
-	__int64 v163; // r9
+	int64_t v163; // r9
 	float v164; // xmm1_4
 	float* v165; // rdx
 	float v166; // xmm1_4
@@ -836,7 +810,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	float v186; // [rsp+108h] [rbp+8h]
 	__m128 a11; // [rsp+120h] [rbp+20h] BYREF
 	char v191[8]; // [rsp+138h] [rbp+38h] BYREF
-	__m128 v194[2]; // [rsp+170h] [rbp+70h] BYREF
+
 	//__m128 v195; // [rsp+180h] [rbp+80h]
 	Font_t* fontArray[4]; // [rsp+190h] [rbp+90h]
 	__m128 v197; // [rsp+1B0h] [rbp+B0h]
@@ -905,7 +879,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	}
 
 
-	v38 = _mm_shuffle_ps(v31, v31, _MM_SHUFFLE(3, 3, 3, 3)).m128_f32[0];
+	v38 = _mm_cvtss_f32(_mm_shuffle_ps(v31, v31, _MM_SHUFFLE(3, 3, 3, 3)));
 
 
 
@@ -913,7 +887,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	v171 = _mm_set_ps(0, 0, 0, v39);
 	v40 = v38 * data.minSize.value.y;
 	v184 = v40;
-	v42 = v31.m128_f32[0] * data.minSize.value.x;
+	v42 = _mm_cvtss_f32(v31) * data.minSize.value.x;
 	//v43 = ((unsigned __int64)a3 - (unsigned __int64)a2->header->renderJobs) >> 4;
 	v177 = v42;
 	if (data.inlineImages.size())
@@ -958,7 +932,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 			quad.assetIndex2 = -1;
 			quad.styleDescriptorIndex = image.styleId + styleDescriptorBase;
 			quad.flags = 0x1F00;
-			__m128 ruiSize = _mm_set_ps(proto.elementHeightRatio,proto.elementWidthRatio,proto.elementHeight,proto.elementWidth);
+			__m128 ruiSize = _mm_set_ps(proto.elementHeightRpc,proto.elementWidthRpc,proto.elementHeight,proto.elementWidth);
 			proto.sub_F9B80_rev( ruiSize, quad, transform, a6, a7, a8, a9, a10, a11);
 
 
@@ -998,7 +972,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	v182 = v82;
 	if (data.textLines.size())
 	{
-		v85 = transform.inputSize.m128_f32[0] - data.textLines[0].float_4;
+		v85 = _mm_cvtss_f32(transform.inputSize) - data.textLines[0].float_4;
 		v86 = data.textLines[0].length;;
 		v173 = byte_4 + 1;
 		v170 = v86;
@@ -1007,7 +981,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 	v87 = data.float_0;
 	v172 = 0.0;
 	v186 = v87;
-	proto.sub_FFAE0(transform.directionVector, _mm_set_ps(proto.elementHeightRatio,proto.elementWidthRatio,proto.elementHeight,proto.elementWidth), v209);
+	proto.sub_FFAE0(transform.directionVector, _mm_set_ps(proto.elementHeightRpc,proto.elementWidthRpc,proto.elementHeight,proto.elementWidth), v209);
 	v88 = 0.0;
 	a11 = _mm_setzero_ps();
 	v204 = (__m128)_mm_shuffle_ps(transform.inputSize, transform.inputSize, 216);
@@ -1025,21 +999,24 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 		v93 = fmaxf(data.styles[v89].boltness.value, v88);
 		v94 = _mm_set_ps(0, 0, 0, v186);
 		v95 = _mm_set_ps(0, 0, 0, data.styles[v89].size.value);
-		v94.m128_f32[0] = (float)(v186 * data.styles[v89].stretchX.value) * v95.m128_f32[0];
+		// v94.m128_f32[0] = (float)(v186 * data.styles[v89].stretchX.value) * v95.m128_f32[0];
+		float val = v186 * data.styles[v89].stretchX.value;
+		v94 = _mm_mul_ps(v95, _mm_set_ps(0, 0, 0, val));
 		v96 = data.styles[v89].backgroundSize.value;
 		v97 = _mm_unpacklo_ps(v94, v95);
 		v98 = _mm_movelh_ps(v97, v97);
 		v167 = fmaxf(
 			data.styles[v89].mainColor.value.alpha,
 			fminf(fmaxf(data.styles[v89].scndColor.value.alpha, data.styles[v89].tertColor.value.alpha), v96)) > 0.0;
-		v101 = v31.m128_f32[0] * v94.m128_f32[0];
+
+		v101 = _mm_cvtss_f32(v31) * _mm_cvtss_f32(v94);
 		v102 = _mm_unpacklo_ps(
 			_mm_set_ps(0, 0, 0, data.styles[v89].dropShadowOffset.value.x),
 			_mm_set_ps(0, 0, 0, data.styles[v89].dropShadowOffset.value.y));
 		v103 = _mm_set_ps(0, 0, 0, data.styles[v89].dropShadowBlur.value);
 		v104 = _mm_shuffle_ps(v31, v31, 255);
 		v183 = v101;
-		v104.m128_f32[0] = v104.m128_f32[0] * v95.m128_f32[0];
+		v104 = _mm_mul_ps(v104, v95);
 		v105 = _mm_mul_ps(
 			_mm_shuffle_ps(
 				_mm_set_ps(0, 0, 0, data.styles[v89].blur.value),
@@ -1051,13 +1028,13 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 				_mm_mul_ps(_mm_shuffle_ps(v103, v103, 0), _mm_set1_ps(0.5)),
 				_mm_xor_ps(_mm_movelh_ps(v102, v102), _mm_set_ps(0, 0, -0.0, -0.0))),
 			v105);
-		v105.m128_f32[0] = v96 + v93;
+		v105 = _mm_move_ss(v105, _mm_set_ss(v96 + v93));
 		a10 = _mm_mul_ps(
 			_mm_xor_ps(_mm_add_ps(v106, _mm_shuffle_ps(v105, v105, 0)), _mm_set_ps(0, 0, -0.0, -0.0)),
 			_mm_shuffle_ps(v31, v31, _MM_SHUFFLE(3, 1, 2, 0)));
 		proportionScale = _mm_set_ps(v91->proportionScaleY, v91->proportionScaleX, v91->proportionScaleY, v91->proportionScaleX);//_mm_loaddup_pd((const double *)&v91->float_1C);
-		v108 = a10.m128_f32[3];
-		v109 = a10.m128_f32[1];
+		v108 = _mm_cvtss_f32(_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(3, 3, 3, 3)));
+		v109 = _mm_cvtss_f32(_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(1, 1, 1, 1)));
 		previousChar = 0;
 		v111 = 0;
 		v112 = 0.0;
@@ -1094,7 +1071,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 				}
 				if (nextChar == '%')
 					break;
-				v119 = sub_F98F0( (const char**)&currentCharPointer, (__int64)v191, printString);
+				v119 = sub_F98F0( (const char**)&currentCharPointer, (int64_t)v191, printString);
 				if (!v119)
 					return 1LL;
 				v120 = v83++;
@@ -1126,13 +1103,13 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 				else
 				{
 
-					while (v91->kerningInfos[(unsigned __int16)kerningStartIndex].otherChar != previousChar)
+					while (v91->kerningInfos[(unsigned short)kerningStartIndex].otherChar != previousChar)
 					{
 						kerningStartIndex = kerningStartIndex + 1;
-						if ((unsigned __int16)kerningStartIndex >= kerningEndIndex)
+						if ((unsigned short)kerningStartIndex >= kerningEndIndex)
 							goto LABEL_46;
 					}
-					float_4 = v91->kerningInfos[(unsigned __int16)kerningStartIndex].kerningDistance;
+					float_4 = v91->kerningInfos[(unsigned short)kerningStartIndex].kerningDistance;
 				}
 
 				v122 = v101 * fontGlyph->float_0;
@@ -1164,15 +1141,15 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					v138 = v179.glyph;
 					v137 = v181.glyph;
 					v111 = 0;
-					float_14_low = _mm_set_ps(0, 0, 0, v181.glyph->posMinY);
-					float_1C_low = _mm_set_ps(0, 0, 0, v181.glyph->posMaxY);
-					float_14_low.m128_f32[0] = fminf(float_14_low.m128_f32[0], v179.glyph->posMinY);
-					float_1C_low.m128_f32[0] = fmaxf(float_1C_low.m128_f32[0], v179.glyph->posMaxY);
+					float_14_low = _mm_set_ps(0, 0, 0, fminf(v181.glyph->posMinY, v179.glyph->posMinY));
+					float_1C_low = _mm_set_ps(0, 0, 0, fmaxf(v181.glyph->posMaxY, v179.glyph->posMaxY));
 					v145 = (float)(v101 * v179.glyph->posMaxX) + v179.float_0;
 					a9 = _mm_add_ps(v142, _mm_set_ps(0, 0, 1, 0));
-					v139 = v145 + a10.m128_f32[2];
-					float_14_low.m128_f32[0] = (float)(float_14_low.m128_f32[0] * v104.m128_f32[0]) + v109;
-					float_1C_low.m128_f32[0] = (float)(float_1C_low.m128_f32[0] * v104.m128_f32[0]) + v108;
+					v139 = v145 + _mm_cvtss_f32(_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(2, 2, 2, 2)));
+					float_14_low = _mm_add_ps(_mm_mul_ps(float_14_low, v104),_mm_set1_ps(v109));
+					float_1C_low = _mm_add_ps(_mm_mul_ps(float_1C_low, v104),_mm_set1_ps(v108));
+					// float_14_low.m128_f32[0] = (float)(float_14_low.m128_f32[0] * v104.m128_f32[0]) + v109;
+					// float_1C_low.m128_f32[0] = (float)(float_1C_low.m128_f32[0] * v104.m128_f32[0]) + v108;
 					v140 = float_14_low;
 					v141 = float_1C_low;
 				}
@@ -1190,24 +1167,43 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					{
 						v133 = v104;
 						v134 = v104;
-						v133.m128_f32[0] = (float)(v104.m128_f32[0] * fontGlyph->posMinY) + v109;
-						v134.m128_f32[0] = (float)(v104.m128_f32[0] * fontGlyph->posMaxY) + v108;
+						v133 = _mm_move_ss(
+								v133,
+								_mm_add_ss(
+									_mm_mul_ss(v104, _mm_set_ss(fontGlyph->posMinY)),
+									_mm_set_ss(v109)
+								)
+							);
+						v134 = _mm_move_ss(
+							v134,
+							_mm_add_ss(
+								_mm_mul_ss(v104, _mm_set_ss(fontGlyph->posMaxY)),
+								_mm_set_ss(v108)
+							)
+						);
+						// v133.m128_f32[0] = (float)(v104.m128_f32[0] * fontGlyph->posMinY) + v109;
+						// v134.m128_f32[0] = (float)(v104.m128_f32[0] * fontGlyph->posMaxY) + v108;
 						if (v111)
 						{
 							v135 = _mm_setzero_ps();
 							v136 = _mm_setzero_ps();
-							v135.m128_f32[0] = v113.m128_f32[0];
-							v136.m128_f32[0] = v114.m128_f32[0];
+							v135 = v113;
+							v136 = v114;
 							v113 = v135;
 							v114 = v136;
-							v113.m128_f32[0] = fminf(v135.m128_f32[0], v133.m128_f32[0]);
-							v114.m128_f32[0] = fmaxf(v136.m128_f32[0], v134.m128_f32[0]);
+							float x = fminf(_mm_cvtss_f32(v135), _mm_cvtss_f32(v133));
+							float y = fmaxf(_mm_cvtss_f32(v136), _mm_cvtss_f32(v134));
+
+							v113 = _mm_move_ss(v113, _mm_set_ss(x));
+							v114 = _mm_move_ss(v114, _mm_set_ss(y));
+							// v113.m128_f32[0] = fminf(v135.m128_f32[0], v133.m128_f32[0]);
+							// v114.m128_f32[0] = fmaxf(v136.m128_f32[0], v134.m128_f32[0]);
 						}
 						else
 						{
 							v113 = (__m128)v133;
 							v114 = (__m128)v134;
-							v112 = (float)((float)(v101 * float_10) + a10.m128_f32[0]) + v84;
+							v112 = ((v101 * float_10) + _mm_cvtss_f32(a10)) + v84;
 							a9 = _mm_sub_ps(a9, _mm_set_ps(0, 0, 0, 1));
 						}
 						++v111;
@@ -1227,17 +1223,44 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					v139 = (float)((float)((float)(v181.glyph->posMaxX + glyph->posMinX) * v101)
 						+ (float)(v181.float_0 + float_0))
 						* 0.5;
-					v140.m128_f32[0] = (float)(fminf(fminf(v140.m128_f32[0], v179.glyph->posMinY), glyph->posMinY)
-						* v104.m128_f32[0])
-						+ a10.m128_f32[1];
-					v141.m128_f32[0] = (float)(fmaxf(fmaxf(v141.m128_f32[0], v179.glyph->posMaxY), glyph->posMaxY)
-						* v104.m128_f32[0])
-						+ a10.m128_f32[3];
+					// v140.m128_f32[0] = (float)(fminf(fminf(v140.m128_f32[0], v179.glyph->posMinY), glyph->posMinY)
+					// 	* v104.m128_f32[0])
+					// 	+ a10.m128_f32[1];
+					// v141.m128_f32[0] = (float)(fmaxf(fmaxf(v141.m128_f32[0], v179.glyph->posMaxY), glyph->posMaxY)
+					// 	* v104.m128_f32[0])
+					// 	+ a10.m128_f32[3];
+					v140 = _mm_move_ss(
+					v140,
+					_mm_add_ss(
+						_mm_mul_ss(
+							_mm_min_ss(
+								_mm_min_ss(v140, _mm_set_ss(v179.glyph->posMinY)),
+								_mm_set_ss(glyph->posMinY)
+							),
+							v104
+						),
+						_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(1, 1, 1, 1))
+					)
+				);
+
+				v141 = _mm_move_ss(
+					v141,
+					_mm_add_ss(
+						_mm_mul_ss(
+							_mm_max_ss(
+								_mm_max_ss(v141, _mm_set_ss(v179.glyph->posMaxY)),
+								_mm_set_ss(glyph->posMaxY)
+							),
+							v104
+						),
+						_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(3, 3, 3, 3))
+					)
+				);
 				}
 				v146 = _mm_setzero_ps();
 				v147 = _mm_setzero_ps();
-				v146.m128_f32[0] = v139;
-				v147.m128_f32[0] = v112;
+				v146 = _mm_move_ss(v146, _mm_set_ss(v139));
+				v147 = _mm_move_ss(v147, _mm_set_ss(v112));
 				v148 = _mm_shuffle_ps(v147, v146, 0);
 				v149 = _mm_shuffle_ps(
 					_mm_set_ps(0, 0, 0, v124->proportions[v137->proportionIndex].scaleBounds),
@@ -1277,21 +1300,27 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					v154 = _mm_shuffle_ps(v154, v154, _MM_SHUFFLE(1, 0, 3, 2));
 					v153 = _mm_shuffle_ps(v153, v153, _MM_SHUFFLE(1, 0, 3, 2));
 				}
-				*(__m128*)& quad.vert[0][0] = v154;
-				*(__m128*)& quad.vert[2][0] = v153;
+				_mm_storeu_ps(&quad.vert[0][0], v154);
+				_mm_storeu_ps(&quad.vert[2][0], v153);
 				proto.AddQuad(quad);
 				v101 = v183;
 				v112 = v139;
 				v113 = v140;
 				v114 = v141;
-				v108 = a10.m128_f32[3];
-				v109 = a10.m128_f32[1];
+				v108 = _mm_cvtss_f32(_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(3, 3, 3, 3)));
+				v109 = _mm_cvtss_f32(_mm_shuffle_ps(a10, a10, _MM_SHUFFLE(1, 1, 1, 1)));
 				a9 = _mm_and_ps(a9, _mm_castsi128_ps(_mm_set_epi32(0,0,~0,~0)));
 			}
 		LABEL_72:
 			if (v131)
 			{
-				v171.m128_f32[0] = v171.m128_f32[0] + (float)(v104.m128_f32[0] + v184);
+			v171 = _mm_move_ss(
+				v171,
+				_mm_add_ss(
+					v171,
+					_mm_add_ss(v104, _mm_set_ss(v184))
+				)
+			);				
 				if (v173 >= v182)
 				{
 					v170 = -1;
@@ -1304,7 +1333,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					v158 = data.textLines[v173].float_4;
 					v173++;
 				}
-				v84 = (float)(transform.inputSize.m128_f32[0] - v158) * v177;
+				v84 = (_mm_cvtss_f32(transform.inputSize) - v158) * v177;
 				if (!fontGlyph || (v159 = fontGlyph->posMinX, v159 == fontGlyph->posMaxX))
 				{
 					v111 = 0;
@@ -1314,13 +1343,35 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					v160 = v104;
 					v175.float_0 = v84;
 					v111 = 1;
+
 					v161 = v101 * v159;
+
 					v162 = v104;
-					v160.m128_f32[0] = (float)(v104.m128_f32[0] * fontGlyph->posMaxY) + v108;
-					v112 = (float)(v161 + a10.m128_f32[0]) + v84;
-					v114 = (__m128)v160;
-					v162.m128_f32[0] = (float)(v104.m128_f32[0] * fontGlyph->posMinY) + v109;
-					v113 = (__m128)v162;
+
+					// v160[0] = v104[0] * fontGlyph->posMaxY + v108;
+					v160 = _mm_move_ss(
+						v160,
+						_mm_add_ss(
+							_mm_mul_ss(v104, _mm_set_ss(fontGlyph->posMaxY)),
+							_mm_set_ss(v108)
+						)
+					);
+
+					// v112 = v161 + a10[0] + v84;
+					v112 = (v161 + _mm_cvtss_f32(a10)) + v84;
+
+					v114 = v160;
+
+					// v162[0] = v104[0] * fontGlyph->posMinY + v109;
+					v162 = _mm_move_ss(
+						v162,
+						_mm_add_ss(
+							_mm_mul_ss(v104, _mm_set_ss(fontGlyph->posMinY)),
+							_mm_set_ss(v109)
+						)
+					);
+
+					v113 = v162;
 				}
 			}
 			v84 = v84 + v122;
@@ -1342,14 +1393,14 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 			else
 			{
 				uint32_t assetIndex = ((uint32_t*)&currentUnicodeChar)[1];
-				//v163 = (__int16)g_AssetIndexData[(unsigned __int16)v117].assetIndex;
-				v163 = (__int16)imageAssetMap[assetIndex].imageIndex;
-				//v164 = (float)uiImageAtlases[ g_AssetIndexData[(unsigned __int16)v117].atlasIndex].textureDimensions[v163].height;
+				//v163 = (__int16_t)g_AssetIndexData[(unsigned __int16_t)v117].assetIndex;
+				v163 = (__int16_t)imageAssetMap[assetIndex].imageIndex;
+				//v164 = (float)uiImageAtlases[ g_AssetIndexData[(unsigned __int16_t)v117].atlasIndex].textureDimensions[v163].height;
 				v164 = (float)imageAtlases[imageAssetMap[assetIndex].atlasIndex].dimentions[v163].height;
 				if (previousChar == 0xF2000)
 				{
-					//if ( (unsigned __int16)v163 >= uiImageAtlases[ g_AssetIndexData[v117].atlasIndex].TextureCount )
-					if ((unsigned __int16)v163 >= imageAtlases[imageAssetMap[assetIndex].atlasIndex].renderOffsets.size())
+					//if ( (unsigned __int16_t)v163 >= uiImageAtlases[ g_AssetIndexData[v117].atlasIndex].TextureCount )
+					if ((uint16_t)v163 >= imageAtlases[imageAssetMap[assetIndex].atlasIndex].renderOffsets.size())
 					{
 						v172 = 0.0;
 						previousChar = currentUnicodeChar;
@@ -1359,10 +1410,10 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					else
 					{
 						previousChar = currentUnicodeChar;
-						//v165 = (float *)&uiImageAtlases[ g_AssetIndexData[(unsigned __int16)v117].atlasIndex].pointer_20[v163];
+						//v165 = (float *)&uiImageAtlases[ g_AssetIndexData[(unsigned __int16_t)v117].atlasIndex].pointer_20[v163];
 						v165 = (float*)&imageAtlases[imageAssetMap[assetIndex].atlasIndex].renderOffsets[v163];
 						fontGlyph = 0LL;
-						v166 = v31.m128_f32[0] * v164;
+						v166 = _mm_cvtss_f32(v31) * v164;
 						v84 = v84 + (float)(v166 * *v165);
 						v172 = v166 * v165[2];
 					}
@@ -1373,7 +1424,7 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 					fontGlyph = 0LL;
 					v84 = v84
 						+ (float)((float)(v164
-							// / (float)uiImageAtlases[ g_AssetIndexData[(unsigned __int16)v117].atlasIndex].textureDimensions[v163].width)
+							// / (float)uiImageAtlases[ g_AssetIndexData[(unsigned __int16_t)v117].atlasIndex].textureDimensions[v163].width)
 							/ (float)imageAtlases[imageAssetMap[assetIndex].atlasIndex].dimentions[v163].width)
 							* v101);
 				}
@@ -1383,7 +1434,8 @@ bool Text_Render(RenderInstance& proto,const TextInputData& data,const Transform
 		if (v77 < 4u)
 		{
 			++currentCharPointer;
-			v88 = a11.m128_f32[0];
+			
+			v88 = _mm_cvtss_f32(a11);
 			continue;
 		}
 
@@ -1397,58 +1449,26 @@ __m128 GetTextSize(TextInputData& data) {
 
 	//ruiStyleDescriptor* unk8Struct_1; // r10
 	//ruiStyleDescriptor* unk8Struct_0; // r9
-	__int64 fontIndex_1E; // rax
-	__int64 v9; // rdi
 	//ruiStyleDescriptor* unk8Struct_2; // r11
-	Font_t* v11; // rcx
-	Font_t* v12; // rdx
-	__int64 v13; // rax
-	Font_t* v14; // r8
-	__int64 word_28_TextSize; // rax
-	float v16; // xmm10_4
-	__int64 v17; // rax
-	float v18; // xmm14_4
-	__int64 v19; // rax
-	//float v20; // xmm12_4 MAPDST
-	__int64 word_2A_TextStretch; // rax
-	float v22; // xmm0_4
-	float v23; // xmm1_4
-	__int64 v24; // rax
-	float v25; // xmm0_4
-	__int64 v26; // rax
-	float v27; // xmm1_4
-	__int64 uint16_32; // rax
-	float v29; // xmm10_4
-	__int64 v30; // rax
-	float v31; // xmm1_4
-	__int64 v32; // rax
 	float v33; // xmm8_4
-	float v34; // xmm0_4
 	float v35; // xmm6_4
-	unsigned __int8 currentStyleId; // r15
-	float v37; // xmm9_4
+	uint8_t currentStyleId; // r15
 	float v38; // xmm15_4
 	float v39; // xmm10_4
 	float v40; // xmm11_4
-	__int64 v41; // rax
 	float v42; // xmm7_4
-	float v43; // xmm14_4
 	float v44; // xmm9_4
 	int v45; // r12d
 	//ruiStyleDescriptor* unk8Struct_3; // rbx
-	float v47; // xmm0_4
-	Glyph_t* fontGlyphs; // rax
 	float* v49; // r14
 	float v50; // xmm8_4
 	float v51; // xmm7_4
 	float v52; // xmm15_4
 	float fVar23; // xmm8_4
 	const char* printText; // rdx MAPDST
-	__int64 uint16_C; // rax
-	__int64 savedTextPointerIndex; // r13
+	int64_t savedTextPointerIndex; // r13
 	float v57; // xmm13_4
 	float v58; // xmm12_4
-	__int64 v59; // rax
 	uint64_t currentUnicodeChar; // eax MAPDST
 	char v62; // r8
 
@@ -1458,48 +1478,29 @@ __m128 GetTextSize(TextInputData& data) {
 	Glyph_t* fontGlyph; // r10
 	int kerningIndex; // ecx
 	int kerningEnd; // r8d
-	KerningInfo_t* pointer_58; // rdx
 	float float_4; // xmm2_4
 	float v72; // xmm1_4
-	__int64 v73; // rcx
-	__int64 v74; // rcx
 	uint32_t v75; // ecx
 	int v76; // r8d
-	unsigned __int64 v77; // rdx
+	uint64_t v77; // rdx
 	float v78; // xmm3_4
-	__int64 v79; // rcx
-	float v80; // xmm1_4
-	float v81; // xmm1_4
-	__int64 v82; // rcx
-	__int64 v83; // rcx
-	__int64 v84; // rcx
-	uint32_t v85; // eax
-	__int64 v86; // r14
-	__int64 assetIndex; // r9
-	ImageAtlasTextureDimention_* v88; // rdx
+	int64_t assetIndex; // r9
+	ImageAtlasTextureDimention* v88; // rdx
 	float* v89; // rcx
 	float v90; // xmm1_4
 	float v91; // xmm0_4
 	float v92; // xmm1_4
 	float v93; // xmm5_4
 	float i; // xmm6_4
-	__int64 v96; // rcx
+	int64_t v96; // rcx
 	float v97; // xmm2_4
-	uint32_t endVar; // eax
-	char v99; // dl
-	char v100; // r8
 	__m128 v101; // xmm1
 	float v102; // xmm5_4
-	unsigned __int64 v103; // rcx
 	__m128 v104; // xmm2_4
-	char v105; // al
 	__m128 result; // xmm0
-	int byte_6; // [rsp+30h] [rbp-D0h]
 	uint32_t v108; // [rsp+34h] [rbp-CCh]
 	const char* currentCharPointer; // [rsp+38h] [rbp-C8h] BYREF
 	int v110; // [rsp+40h] [rbp-C0h]
-	uint32_t dword_28C8; // [rsp+44h] [rbp-BCh]
-	uint32_t dword_28CC; // [rsp+48h] [rbp-B8h]
 	Font_t* a1a; // [rsp+50h] [rbp-B0h]
 	float sizeX[4]; // [rsp+60h] [rbp-A0h]
 	float v116[4]; // [rsp+70h] [rbp-90h]
@@ -1511,7 +1512,7 @@ __m128 GetTextSize(TextInputData& data) {
 	char v124[8]; // [rsp+A8h] [rbp-58h] BYREF
 	Font_t* v125[4]; // [rsp+B0h] [rbp-50h]
 	const char* savedTextPointer[5]; // [rsp+D0h] [rbp-30h]
-	unsigned __int8 v129; // [rsp+210h] [rbp+110h]
+	uint8_t v129; // [rsp+210h] [rbp+110h]
 	int stringUnicodeLength; // [rsp+218h] [rbp+118h]
 	unsigned int v130;
 
@@ -1682,7 +1683,7 @@ __m128 GetTextSize(TextInputData& data) {
 
 						v64 = (char*)sub_F98F0(
 							&currentCharPointer,
-							(__int64)v124,
+							(int64_t)v124,
 							printText);
 						if (!v64)
 							goto LABEL_57;
@@ -1707,7 +1708,7 @@ __m128 GetTextSize(TextInputData& data) {
 				{
 					v93 = fVar23;
 					for (i = fVar23;
-						_BitScanForward((DWORD*)&v96, v130);
+						BitScanForwardCompat((unsigned long*)&v96, v130);
 						i = fmaxf(i, v97 + sizeY[v96]))
 					{
 						v130 = (v130 - 1) & v130;
@@ -1737,11 +1738,11 @@ __m128 GetTextSize(TextInputData& data) {
 				data.inlineImages.push_back(img);
 				v130 = (1LL << currentStyleId);
 
-				assetIndex = (__int16)imageAssetMap[curAsset].imageIndex;
+				assetIndex = (__int16_t)imageAssetMap[curAsset].imageIndex;
 				v88 = &imageAtlases[imageAssetMap[curAsset].atlasIndex].dimentions[assetIndex];
 				if (v45 == 0xF2000)
 				{
-					if ((unsigned __int16)assetIndex >= imageAtlases[imageAssetMap[curAsset].atlasIndex].renderOffsets.size())
+					if ((uint16_t)assetIndex >= imageAtlases[imageAssetMap[curAsset].atlasIndex].renderOffsets.size())
 						goto LABEL_49;
 
 					v89 = (float*)&imageAtlases[imageAssetMap[curAsset].atlasIndex].renderOffsets[assetIndex];
@@ -1789,11 +1790,13 @@ LABEL_57:
 	v102 = fmaxf(v44, v51);
 	v104 = _mm_set_ps(0, 0, 0, data.maxSize.value.y);
 
-	v104.m128_f32[0] = v104.m128_f32[0] / fmaxf(v104.m128_f32[0], v102);
-	data.float_0 = v104.m128_f32[0];
+	float x = _mm_cvtss_f32(v104);
+	x = x / fmaxf(x, v102);
 
+	data.float_0 = x;
 
-	v104.m128_f32[0] = v104.m128_f32[0] * v102;
+	x = x * v102;
+	v104 = _mm_move_ss(v104, _mm_set_ss(x));
 
 	result = _mm_shuffle_ps(v104, v101, 0);
 
